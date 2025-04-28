@@ -235,6 +235,25 @@ def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, s
         print(f"写入 PAC 文件失败: {e}")
         return False
 
+def show_help():
+    """显示帮助信息"""
+    print("CN-PAC - 自动生成代理自动配置（PAC）文件的工具")
+    print("\n用法: python3 generate_pac.py [选项]")
+    print("\n选项:")
+    print("  --proxy PROXY      设置代理服务器规则，用于访问代理域名")
+    print(f"                     默认值: {PROXY_SERVER}")
+    print("  --direct DIRECT    设置直连规则，用于访问直连域名和内网 IP")
+    print(f"                     默认值: {DIRECT_RULE}")
+    print("  --default DEFAULT  设置默认规则，用于不匹配任何规则的情况")
+    print(f"                     默认值: 与 --proxy 相同")
+    print("  --skip-download    跳过下载 ACL4SSR 中国域名列表")
+    print("  --check-duplicates 检查并从 direct.txt 中自动移除与 ACL4SSR 中国域名列表重复的域名")
+    print("  --help             显示此帮助信息\n")
+    print("示例:")
+    print("  python3 generate_pac.py --proxy \"PROXY 192.168.1.100:8080; DIRECT\"")
+    print("  python3 generate_pac.py --direct \"DIRECT\" --default \"SOCKS5 127.0.0.1:1080; DIRECT\"")
+    print("  python3 generate_pac.py --check-duplicates")
+
 if __name__ == "__main__":
     # 支持命令行参数设置代理服务器和默认规则
     proxy = PROXY_SERVER
@@ -261,6 +280,9 @@ if __name__ == "__main__":
         elif sys.argv[i] == "--check-duplicates":
             check_duplicates = True
             i += 1
+        elif sys.argv[i] == "--help":
+            show_help()
+            sys.exit(0)
         else:
             i += 1
     
