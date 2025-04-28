@@ -123,33 +123,39 @@ def format_domains_for_pac(domains, localarea_domains=None):
     return json.dumps(domains_list, separators=(',', ':'))
 
 def check_duplicate_domains(china_domains, custom_domains):
-    """检查自定义直连域名中哪些已经存在于中国域名列表中
+    """检查自定义直连域名中哪些已经存在于中国域名列表中，并返回清理后的域名列表
     
     Args:
         china_domains: 中国域名集合
         custom_domains: 自定义直连域名集合
     
     Returns:
-        duplicate_domains: 重复的域名列表
+        tuple: (重复的域名列表, 清理后的域名集合)
     """
     duplicate_domains = []
+    duplicate_set = set()  # 记录所有需要移除的域名
     
     # 检查完全匹配的域名
     direct_duplicates = custom_domains.intersection(china_domains)
     if direct_duplicates:
         duplicate_domains.extend(list(direct_duplicates))
+        duplicate_set.update(direct_duplicates)
     
     # 检查是否是中国域名的子域名
     for custom_domain in custom_domains:
-        if custom_domain not in direct_duplicates:  # 已经是完全匹配的就不再检查
+        if custom_domain not in duplicate_set:  # 已经标记为重复的就不再检查
             domain_parts = custom_domain.split('.')
             for i in range(1, len(domain_parts)):
                 parent_domain = '.'.join(domain_parts[i:])
                 if parent_domain in china_domains:
                     duplicate_domains.append(f"{custom_domain} (子域名: {parent_domain})")
+                    duplicate_set.add(custom_domain)  # 添加到需要移除的集合
                     break
     
-    return duplicate_domains
+    # 创建清理后的域名集合
+    clean_domains = custom_domains - duplicate_set
+    
+    return duplicate_domains, clean_domains
 
 def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, skip_download=False, check_duplicates=False):
     """生成 PAC 文件"""
@@ -179,12 +185,16 @@ def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, s
     
     # 如果需要检查重复域名
     if check_duplicates:
-        duplicate_domains = check_duplicate_domains(china_domains, custom_direct_domains)
+        duplicate_domains, clean_custom_direct_domains = check_duplicate_domains(china_domains, custom_direct_domains)
         if duplicate_domains:
             print("\n以下域名已存在于中国域名列表中，可以从 direct.txt 中移除：")
             for domain in sorted(duplicate_domains):
                 print(f"- {domain}")
             print()
+            
+            # 使用去重后的域名数组替换原始域名数组
+            custom_direct_domains = clean_custom_direct_domains
+            print(f"已自动移除重复域名，优化后的自定义直连域名数量: {len(custom_direct_domains)}")
     
     # 合并直连域名（局域网域名优先，然后是中国域名和自定义直连域名）
     direct_domains = localarea_domains.union(china_domains).union(custom_direct_domains)

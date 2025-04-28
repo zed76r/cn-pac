@@ -31,7 +31,7 @@ jobs:
       
       - name: 运行 PAC 生成脚本
         run: |
-          python3 generate_pac.py
+          python3 generate_pac.py --check-duplicates
         
       - name: 获取当前日期
         id: date
