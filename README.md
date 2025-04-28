@@ -70,7 +70,11 @@ python3 generate_pac.py --proxy "PROXY proxy.example.com:8080" --direct "DIRECT"
 
 ### 使用预构建的 PAC 文件
 
-您也可以直接从 [GitHub Releases](https://github.com/yourusername/cn-pac/releases) 下载最新的预构建 PAC 文件。
+您可以通过以下方式获取最新的预构建 PAC 文件：
+
+- **直接下载**：[点击此处下载最新版本的 proxy.pac 文件](https://github.com/zed76r/cn-pac/releases/latest/download/proxy.pac)
+- **查看所有版本**：访问 [GitHub Releases](https://github.com/zed76r/cn-pac/releases) 页面查看所有历史版本
+
 
 ## 配置说明
 
