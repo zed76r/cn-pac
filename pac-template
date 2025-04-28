@@ -6,14 +6,14 @@ function FindProxyForURL(url, host) {
         return "{direct}";
     }
 
-    // 检查是否匹配直连域名
-    if (isDirectDomain(host)) {
-        return "{direct}";
-    }
-
-    // 检查是否匹配代理域名
+    // 检查是否匹配代理域名（优先级提高）
     if (isProxyDomain(host)) {
         return "{proxy}";
+    }
+
+    // 检查是否匹配直连域名（优先级降低）
+    if (isDirectDomain(host)) {
+        return "{direct}";
     }
 
     // 默认规则
