@@ -36,15 +36,67 @@ jobs:
       - name: 获取当前日期
         id: date
         run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+
+      - name: 检查现有 Release 并生成 Tag 名称
+        id: check_releases
+        run: |
+          # 获取基本日期标签
+          BASE_TAG=${{ steps.date.outputs.DATE }}
+          
+          # 检查是否已存在同名标签
+          TAG_EXISTS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/git/refs/tags/${BASE_TAG}")
+          
+          # 如果标签不存在，直接使用基本日期作为标签
+          if [ "$TAG_EXISTS" != "200" ]; then
+            echo "TAG=${BASE_TAG}" >> $GITHUB_OUTPUT
+            echo "RELEASE_NAME=PAC 更新 ${BASE_TAG}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # 如果标签已存在，查找所有相关标签并确定下一个序号
+          TAGS=$(curl -s \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/git/refs/tags" | \
+            grep -o "\"ref\": \"refs/tags/${BASE_TAG}[-]*[0-9]*\"" | \
+            grep -o "${BASE_TAG}[-]*[0-9]*")
+          
+          # 查找最大序号
+          MAX_NUM=0
+          for TAG in $TAGS; do
+            if [[ "$TAG" == "$BASE_TAG" ]]; then
+              # 基本标签存在，下一个至少是 -1
+              if [ "$MAX_NUM" -eq 0 ]; then
+                MAX_NUM=1
+              fi
+            elif [[ "$TAG" =~ ${BASE_TAG}-([0-9]+)$ ]]; then
+              NUM=${BASH_REMATCH[1]}
+              if [ "$NUM" -ge "$MAX_NUM" ]; then
+                MAX_NUM=$((NUM + 1))
+              fi
+            fi
+          done
+          
+          # 生成新标签名称
+          if [ "$MAX_NUM" -gt 0 ]; then
+            NEW_TAG="${BASE_TAG}-${MAX_NUM}"
+          else
+            NEW_TAG="${BASE_TAG}"
+          fi
+          
+          echo "TAG=${NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "RELEASE_NAME=PAC 更新 ${NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "将使用标签: ${NEW_TAG}"
       
       - name: 创建 Release
         id: create_release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ steps.date.outputs.DATE }}
-          name: PAC 更新 ${{ steps.date.outputs.DATE }}
+          tag_name: ${{ steps.check_releases.outputs.TAG }}
+          name: ${{ steps.check_releases.outputs.RELEASE_NAME }}
           body: |
-            PAC 文件自动更新 - ${{ steps.date.outputs.DATE }}
+            PAC 文件自动更新 - ${{ steps.check_releases.outputs.TAG }}
             
             本次更新包含了最新的中国域名列表和代理域名列表。
           files: |
