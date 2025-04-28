@@ -86,13 +86,20 @@ python3 generate_pac.py --help
 
 ## 配置说明
 
+### 直连域名和代理域名的匹配规则
+
+在 `config/direct.txt` 和 `config/proxy.txt` 文件中，每一行可以填写完整域名或以点号开头的后缀：
+
+- `example.com` 表示仅匹配 `example.com` 这个域名。
+- `.example.com` 表示匹配所有以 `example.com` 结尾的域名（如 `www.example.com`、`sub.example.com`）。
+
 ### 直连域名
 
 在 `config/direct.txt` 文件中，每行一个域名：
 
 ```
 example.com
-example.org
+.example.com
 ```
 
 ### 代理域名
@@ -101,7 +108,7 @@ example.org
 
 ```
 google.com
-github.com
+.github.com
 ```
 
 ## 自动构建
