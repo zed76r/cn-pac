@@ -115,8 +115,9 @@ github.com
 - [gfw-pac](https://github.com/zhiyi7/gfw-pac) - PAC 文件生成的基础实现和模板
 - [ACL4SSR](https://github.com/ACL4SSR/ACL4SSR) - 提供优质的中国域名列表
 - [private-ip](https://github.com/frenchbread/private-ip) - 用于检测内网 IP 地址的正则表达式实现
+- [GitHub Copilot](https://github.com/features/copilot) - 提供了智能代码建议和帮助优化脚本功能，特别是在重构代码结构、增强文件处理和添加命令行参数支持方面
 
-这些优秀的开源项目为本工具的开发提供了宝贵的参考和资源。
+这些优秀的开源项目和工具为本工具的开发提供了宝贵的参考和资源。
 
 ## 许可证
 
