@@ -16,7 +16,7 @@ OUTPUT_DIR = "output"
 PAC_TEMPLATE = "pac-template"
 PROXY_SERVER = "SOCKS5 127.0.0.1:%mixed-port%; DIRECT;"  # 默认代理服务器
 DIRECT_RULE = "DIRECT"  # 默认直连规则
-DEFAULT_RULE = "DIRECT"  # 默认规则
+DEFAULT_RULE = PROXY_SERVER  # 默认规则与代理服务器相同
 TIMEOUT = 30  # 设置请求超时时间（秒）
 
 def ensure_dir(directory):

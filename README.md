@@ -1,6 +1,6 @@
 # CN-PAC
 
-自动生成代理自动配置（PAC）文件的工具。
+一个轻量、高效的代理自动配置（PAC）文件生成工具，专注于优化中国网站直连访问体验。
 
 ## 项目背景
 
@@ -52,7 +52,7 @@ python3 generate_pac.py [--proxy PROXY] [--direct DIRECT] [--default DEFAULT] [-
 |------|------|--------|
 | `--proxy` | 设置代理服务器规则，用于访问代理域名 | `SOCKS5 127.0.0.1:%mixed-port%; DIRECT;` |
 | `--direct` | 设置直连规则，用于访问直连域名和内网 IP | `DIRECT` |
-| `--default` | 设置默认规则，用于不匹配任何规则的情况 | `DIRECT` |
+| `--default` | 设置默认规则，用于不匹配任何规则的情况 | 与 `--proxy` 相同 |
 | `--skip-download` | 跳过下载 ACL4SSR 中国域名列表 | - |
 | `--check-duplicates` | 检查并输出 direct.txt 中与 ACL4SSR 中国域名列表重复的域名 | - |
 
