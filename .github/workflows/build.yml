@@ -29,9 +29,29 @@ jobs:
         with:
           python-version: '3.13'
       
-      - name: 运行 PAC 生成脚本
+      - name: 运行 PAC 生成脚本并捕获统计数据
+        id: generate_pac
         run: |
-          python3 generate_pac.py --check-duplicates
+          # 使用 tee 命令同时输出到控制台和文件
+          python3 generate_pac.py --check-duplicates | tee pac_output.log
+          
+          # 从输出日志中提取统计数据
+          LOCALAREA_COUNT=$(grep -o "局域网域名数量: [0-9]*" pac_output.log | awk '{print $2}')
+          CHINA_COUNT=$(grep -o "中国域名数量: [0-9]*" pac_output.log | awk '{print $2}')
+          DIRECT_COUNT=$(grep -o "自定义直连域名数量: [0-9]*" pac_output.log | awk '{print $2}')
+          TOTAL_DIRECT=$(grep -o "直连域名总数: [0-9]*" pac_output.log | awk '{print $2}')
+          PROXY_COUNT=$(grep -o "代理域名总数: [0-9]*" pac_output.log | awk '{print $2}')
+          
+          # 检查是否有移除的重复域名
+          REMOVED_COUNT=$(grep -o "已自动移除重复域名.*: [0-9]*" pac_output.log | awk '{print $NF}')
+          
+          # 输出到环境变量
+          echo "LOCALAREA_COUNT=${LOCALAREA_COUNT:-0}" >> $GITHUB_OUTPUT
+          echo "CHINA_COUNT=${CHINA_COUNT:-0}" >> $GITHUB_OUTPUT
+          echo "DIRECT_COUNT=${DIRECT_COUNT:-0}" >> $GITHUB_OUTPUT
+          echo "TOTAL_DIRECT=${TOTAL_DIRECT:-0}" >> $GITHUB_OUTPUT
+          echo "PROXY_COUNT=${PROXY_COUNT:-0}" >> $GITHUB_OUTPUT
+          echo "REMOVED_COUNT=${REMOVED_COUNT:-0}" >> $GITHUB_OUTPUT
         
       - name: 获取当前日期
         id: date
@@ -51,7 +71,7 @@ jobs:
           # 如果标签不存在，直接使用基本日期作为标签
           if [ "$TAG_EXISTS" != "200" ]; then
             echo "TAG=${BASE_TAG}" >> $GITHUB_OUTPUT
-            echo "RELEASE_NAME=PAC 更新 ${BASE_TAG}" >> $GITHUB_OUTPUT
+            echo "RELEASE_NAME=${BASE_TAG}" >> $GITHUB_OUTPUT
             exit 0
           fi
           
@@ -86,7 +106,7 @@ jobs:
           fi
           
           echo "TAG=${NEW_TAG}" >> $GITHUB_OUTPUT
-          echo "RELEASE_NAME=PAC 更新 ${NEW_TAG}" >> $GITHUB_OUTPUT
+          echo "RELEASE_NAME=${NEW_TAG}" >> $GITHUB_OUTPUT
           echo "将使用标签: ${NEW_TAG}"
       
       - name: 创建 Release
@@ -98,7 +118,15 @@ jobs:
           body: |
             PAC 文件自动更新 - ${{ steps.check_releases.outputs.TAG }}
             
-            本次更新包含了最新的中国域名列表和代理域名列表。
+            ## 更新统计
+            - 局域网域名数量: ${{ steps.generate_pac.outputs.LOCALAREA_COUNT }}
+            - 中国域名数量: ${{ steps.generate_pac.outputs.CHINA_COUNT }}
+            - 自定义直连域名数量: ${{ steps.generate_pac.outputs.DIRECT_COUNT }}
+            - 直连域名总数: ${{ steps.generate_pac.outputs.TOTAL_DIRECT }}
+            - 代理域名总数: ${{ steps.generate_pac.outputs.PROXY_COUNT }}
+            ${{ steps.generate_pac.outputs.REMOVED_COUNT != '0' && format('- 已移除重复域名: {0}', steps.generate_pac.outputs.REMOVED_COUNT) || '' }}
+            
+            本次更新基于最新的 ACL4SSR 中国域名列表生成。
           files: |
             output/proxy.pac
           draft: false
