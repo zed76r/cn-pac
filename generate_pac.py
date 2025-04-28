@@ -247,7 +247,7 @@ def show_help():
     print("  --default DEFAULT  设置默认规则，用于不匹配任何规则的情况")
     print(f"                     默认值: 与 --proxy 相同")
     print("  --skip-download    跳过下载 ACL4SSR 中国域名列表")
-    print("  --check-duplicates 检查并从 direct.txt 中自动移除与 ACL4SSR 中国域名列表重复的域名")
+    print("  --check-duplicates 检查 direct.txt 中与 ACL4SSR 中国域名列表重复的域名，并在生成 PAC 文件时排除这些重复域名")
     print("  --help             显示此帮助信息\n")
     print("示例:")
     print("  python3 generate_pac.py --proxy \"PROXY 192.168.1.100:8080; DIRECT\"")

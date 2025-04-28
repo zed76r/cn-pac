@@ -54,7 +54,7 @@ python3 generate_pac.py [--proxy PROXY] [--direct DIRECT] [--default DEFAULT] [-
 | `--direct` | 设置直连规则，用于访问直连域名和内网 IP | `DIRECT` |
 | `--default` | 设置默认规则，用于不匹配任何规则的情况 | 与 `--proxy` 相同 |
 | `--skip-download` | 跳过下载 ACL4SSR 中国域名列表 | - |
-| `--check-duplicates` | 检查并自动从 direct.txt 中移除与 ACL4SSR 中国域名列表重复的域名 | - |
+| `--check-duplicates` | 检查 direct.txt 中与 ACL4SSR 中国域名列表重复的域名，并在生成 PAC 文件时排除这些重复域名 | - |
 | `--help` | 显示帮助信息 | - |
 
 示例：
