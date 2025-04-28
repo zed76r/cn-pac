@@ -33,27 +33,29 @@ function isPrivateIp(ip) {
         /^::$/.test(ip);
 }
 
-// 匹配主机名是否在域名列表中（使用子域名后缀匹配）
-function domainSuffixMatch(domain, domainList) {
+// 后缀匹配函数 (example.com 匹配 sub.example.com)
+function domainSuffixMatch(domain, suffixList) {
+    var host = domain.toLowerCase();
+    var list_len = suffixList.length;
+    for (var i = 0; i < list_len; i++) {
+        var pattern = suffixList[i];
+        // 检查是否为子域名
+        if (host === pattern || host.endsWith("." + pattern)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// 完全匹配函数 (exact match)
+function domainExactMatch(domain, domainList) {
     var host = domain.toLowerCase();
     var list_len = domainList.length;
     for (var i = 0; i < list_len; i++) {
         var pattern = domainList[i];
         // 检查完全匹配
-        if (host == pattern) {
+        if (host === pattern) {
             return true;
-        }
-        // 检查后缀匹配（形如.example.com的域名）
-        if (pattern.charAt(0) == '.') {
-            if (host.endsWith(pattern)) {
-                return true;
-            }
-        } 
-        // 检查子域名匹配（形如example.com匹配a.example.com）
-        else {
-            if (host.endsWith('.' + pattern)) {
-                return true;
-            }
         }
     }
     return false;
@@ -61,16 +63,22 @@ function domainSuffixMatch(domain, domainList) {
 
 // 直连域名检测函数
 function isDirectDomain(host) {
-    return domainSuffixMatch(host, directDomains);
+    return domainSuffixMatch(host, directDomainSuffixes) || domainExactMatch(host, directDomainExacts);
 }
 
 // 代理域名检测函数
 function isProxyDomain(host) {
-    return domainSuffixMatch(host, proxyDomains);
+    return domainSuffixMatch(host, proxyDomainSuffixes) || domainExactMatch(host, proxyDomainExacts);
 }
 
-// 直连域名列表
-var directDomains = __DIRECT_DOMAINS_PLACEHOLDER__;
+// 直连域名后缀列表 (.example.com)
+var directDomainSuffixes = __DIRECT_DOMAIN_SUFFIXES__;
 
-// 代理域名列表
-var proxyDomains = __PROXY_DOMAINS_PLACEHOLDER__;
+// 直连域名完全匹配列表 (example.com)
+var directDomainExacts = __DIRECT_DOMAIN_EXACTS__;
+
+// 代理域名后缀列表 (.example.com)
+var proxyDomainSuffixes = __PROXY_DOMAIN_SUFFIXES__;
+
+// 代理域名完全匹配列表 (example.com)
+var proxyDomainExacts = __PROXY_DOMAIN_EXACTS__;

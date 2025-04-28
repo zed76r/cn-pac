@@ -25,13 +25,14 @@ def ensure_dir(directory):
         os.makedirs(directory)
 
 def download_china_domains(skip_download=False):
-    """从 ACL4SSR 下载中国域名列表"""
+    """从 ACL4SSR 下载中国域名列表，区分 DOMAIN-SUFFIX 和 DOMAIN 类型"""
     if skip_download:
         print("跳过下载中国域名列表...")
-        return set()
+        return {"suffixes": set(), "domains": set()}
         
     print("正在下载 ACL4SSR 中国域名列表...")
-    domains = set()
+    domain_suffixes = set()  # 后缀匹配
+    domain_exacts = set()    # 全字匹配
     try:
         req = urllib.request.Request(CNLIST_URL)
         with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
@@ -40,28 +41,29 @@ def download_china_domains(skip_download=False):
                 # 提取域名规则
                 line = line.strip()
                 if line.startswith('DOMAIN-SUFFIX,'):
-                    # 提取形如 DOMAIN-SUFFIX,example.com 的域名
+                    # 提取形如 DOMAIN-SUFFIX,example.com 的域名作为后缀匹配
                     domain = line.split(',')[1].strip()
-                    domains.add(domain)
+                    domain_suffixes.add(domain)  # 直接添加域名作为后缀
                 elif line.startswith('DOMAIN,'):
-                    # 提取形如 DOMAIN,example.com 的域名
+                    # 提取形如 DOMAIN,example.com 的域名作为全字匹配
                     domain = line.split(',')[1].strip()
-                    domains.add(domain)
+                    domain_exacts.add(domain)
                 # 直连关键词我们直接忽略，因为 PAC 不支持关键词匹配
-        print(f"成功下载 {len(domains)} 个中国域名")
-        return domains
+        print(f"成功下载中国域名: {len(domain_suffixes)} 个后缀匹配, {len(domain_exacts)} 个全字匹配")
+        return {"suffixes": domain_suffixes, "domains": domain_exacts}
     except Exception as e:
         print(f"下载中国域名列表失败: {e}")
-        return set()
+        return {"suffixes": set(), "domains": set()}
 
 def download_localarea_domains(skip_download=False):
-    """从 ACL4SSR 下载局域网域名列表"""
+    """从 ACL4SSR 下载局域网域名列表，区分 DOMAIN-SUFFIX 和 DOMAIN 类型"""
     if skip_download:
         print("跳过下载局域网域名列表...")
-        return set()
+        return {"suffixes": set(), "domains": set()}
         
     print("正在下载 ACL4SSR 局域网域名列表...")
-    domains = set()
+    domain_suffixes = set()  # 后缀匹配
+    domain_exacts = set()    # 全字匹配
     try:
         req = urllib.request.Request(LOCALAREA_URL)
         with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
@@ -70,95 +72,123 @@ def download_localarea_domains(skip_download=False):
                 # 提取域名规则
                 line = line.strip()
                 if line.startswith('DOMAIN-SUFFIX,'):
-                    # 提取形如 DOMAIN-SUFFIX,example.com 的域名
+                    # 提取形如 DOMAIN-SUFFIX,example.com 的域名作为后缀匹配
                     domain = line.split(',')[1].strip()
-                    domains.add(domain)
+                    domain_suffixes.add(domain)  # 直接添加域名作为后缀
                 elif line.startswith('DOMAIN,'):
-                    # 提取形如 DOMAIN,example.com 的域名
+                    # 提取形如 DOMAIN,example.com 的域名作为全字匹配
                     domain = line.split(',')[1].strip()
-                    domains.add(domain)
+                    domain_exacts.add(domain)
                 # 其他规则类型（如 IP-CIDR）在 PAC 中不直接支持，已通过模板中的 isPrivateIP 函数处理
-        print(f"成功下载 {len(domains)} 个局域网域名")
-        return domains
+        print(f"成功下载局域网域名: {len(domain_suffixes)} 个后缀匹配, {len(domain_exacts)} 个全字匹配")
+        return {"suffixes": domain_suffixes, "domains": domain_exacts}
     except Exception as e:
         print(f"下载局域网域名列表失败: {e}")
-        return set()
+        return {"suffixes": set(), "domains": set()}
 
-def read_domain_file(filepath):
-    """读取域名文件"""
-    domains = set()
-    try:
-        if os.path.exists(filepath):
-            with open(filepath, 'r', encoding='utf-8') as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        domains.add(line)
-        return domains
-    except Exception as e:
-        print(f"读取 {filepath} 失败: {e}")
-        return set()
+def read_domain_file(filename):
+    """读取域名文件，根据是否以.开头来区分后缀匹配和全字匹配"""
+    domains = {"suffixes": set(), "domains": set()}
+    
+    with open(filename, "r") as f:
+        for line in f:
+            domain = line.strip()
+            if domain and not domain.startswith("#"):
+                if domain.startswith("."):
+                    # 以.开头的是后缀匹配规则，但需要去掉前面的.
+                    domains["suffixes"].add(domain[1:])
+                else:
+                    # 不以.开头的是全字匹配规则
+                    domains["domains"].add(domain)
+    
+    return domains
 
-def format_domains_for_pac(domains, localarea_domains=None):
-    """格式化域名列表为 PAC 文件中的 JavaScript 数组格式（单行紧凑格式）
+def format_domain_lists_for_pac(domain_dict, local_domains=None):
+    """格式化域名列表为PAC文件需要的JSON格式，分别处理后缀和全字匹配域名"""
+    # 初始化返回字典
+    result = {
+        "suffixes": "",
+        "domains": ""
+    }
     
-    如果提供了局域网域名列表，会确保这些域名排在最前面
-    """
-    if not domains:
-        return "[]"
-    
-    if localarea_domains:
-        # 确保局域网域名排在最前面
-        # 先提取局域网域名（保持它们的顺序）
-        local_list = sorted(list(localarea_domains))
-        # 然后提取其他域名（排除已经包含的局域网域名）
-        other_list = sorted(list(domains - localarea_domains))
-        # 合并两个列表，局域网域名在前
-        domains_list = local_list + other_list
+    # 处理后缀匹配域名
+    if "suffixes" in domain_dict and domain_dict["suffixes"]:
+        suffix_domains = list(sorted(domain_dict["suffixes"]))
+        result["suffixes"] = json.dumps(suffix_domains, ensure_ascii=False)
     else:
-        # 没有局域网域名列表，按正常方式排序
-        domains_list = sorted(list(domains))
+        result["suffixes"] = "[]"
     
-    # 使用紧凑格式，所有域名在一行中显示
-    return json.dumps(domains_list, separators=(',', ':'))
+    # 处理全字匹配域名
+    if "domains" in domain_dict and domain_dict["domains"]:
+        exact_domains = list(sorted(domain_dict["domains"]))
+        result["domains"] = json.dumps(exact_domains, ensure_ascii=False)
+    else:
+        result["domains"] = "[]"
+    
+    return result
 
 def check_duplicate_domains(china_domains, custom_domains):
     """检查自定义直连域名中哪些已经存在于中国域名列表中，并返回清理后的域名列表
     
     Args:
-        china_domains: 中国域名集合
-        custom_domains: 自定义直连域名集合
+        china_domains: 中国域名字典，包含 "suffixes" 和 "domains" 键
+        custom_domains: 自定义直连域名字典，包含 "suffixes" 和 "domains" 键
     
     Returns:
-        tuple: (重复的域名列表, 清理后的域名集合)
+        tuple: (重复的域名列表, 清理后的域名字典)
     """
     duplicate_domains = []
-    duplicate_set = set()  # 记录所有需要移除的域名
     
-    # 检查完全匹配的域名
-    direct_duplicates = custom_domains.intersection(china_domains)
-    if direct_duplicates:
-        duplicate_domains.extend(list(direct_duplicates))
-        duplicate_set.update(direct_duplicates)
+    # 初始化清理后的域名集合
+    clean_domains = {
+        "suffixes": set(custom_domains.get("suffixes", set())),
+        "domains": set(custom_domains.get("domains", set()))
+    }
     
-    # 检查是否是中国域名的子域名
-    for custom_domain in custom_domains:
-        if custom_domain not in duplicate_set:  # 已经标记为重复的就不再检查
-            domain_parts = custom_domain.split('.')
-            for i in range(1, len(domain_parts)):
-                parent_domain = '.'.join(domain_parts[i:])
-                if parent_domain in china_domains:
-                    duplicate_domains.append(f"{custom_domain} (子域名: {parent_domain})")
-                    duplicate_set.add(custom_domain)  # 添加到需要移除的集合
-                    break
+    # 对后缀匹配域名进行检查
+    cn_suffixes = china_domains.get("suffixes", set())
+    custom_suffixes = custom_domains.get("suffixes", set())
     
-    # 创建清理后的域名集合
-    clean_domains = custom_domains - duplicate_set
+    # 1. 检查完全匹配的后缀
+    suffix_duplicates = custom_suffixes.intersection(cn_suffixes)
+    if suffix_duplicates:
+        duplicate_domains.extend(list(suffix_duplicates))
+        clean_domains["suffixes"] -= suffix_duplicates
+    
+    # 2. 检查自定义后缀域名是否是中国域名后缀的子域名
+    for custom_suffix in list(clean_domains["suffixes"]):
+        domain_parts = custom_suffix.split('.')
+        for i in range(1, len(domain_parts)):
+            parent_domain = '.'.join(domain_parts[i:])
+            if parent_domain in cn_suffixes:
+                duplicate_domains.append(f"{custom_suffix} (子域名匹配: {parent_domain})")
+                clean_domains["suffixes"].remove(custom_suffix)
+                break
+    
+    # 对全字匹配域名进行检查
+    cn_exact_domains = china_domains.get("domains", set())
+    custom_exact_domains = custom_domains.get("domains", set())
+    
+    # 3. 检查完全匹配的域名
+    domain_duplicates = custom_exact_domains.intersection(cn_exact_domains)
+    if domain_duplicates:
+        duplicate_domains.extend(list(domain_duplicates))
+        clean_domains["domains"] -= domain_duplicates
+    
+    # 4. 检查自定义全字匹配域名是否是中国域名后缀的子域名
+    for custom_domain in list(clean_domains["domains"]):
+        domain_parts = custom_domain.split('.')
+        for i in range(1, len(domain_parts)):
+            parent_domain = '.'.join(domain_parts[i:])
+            if parent_domain in cn_suffixes:
+                duplicate_domains.append(f"{custom_domain} (子域名匹配: {parent_domain})")
+                clean_domains["domains"].remove(custom_domain)
+                break
     
     return duplicate_domains, clean_domains
 
 def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, skip_download=False, check_duplicates=False):
-    """生成 PAC 文件"""
+    """生成 PAC 文件，区分后缀匹配和全字匹配域名"""
     print("开始生成 PAC 文件...")
     
     # 确保配置和输出目录存在
@@ -172,10 +202,14 @@ def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, s
     if not os.path.exists(direct_config):
         with open(direct_config, 'w', encoding='utf-8') as f:
             f.write("# 自定义直连域名列表，每行一个域名\n")
+            f.write("# 以 . 开头的域名（如 .example.com）视为后缀匹配\n")
+            f.write("# 其他域名（如 example.com）视为全字匹配\n")
     
     if not os.path.exists(proxy_config):
         with open(proxy_config, 'w', encoding='utf-8') as f:
             f.write("# 自定义代理域名列表，每行一个域名\n")
+            f.write("# 以 . 开头的域名（如 .example.com）视为后缀匹配\n")
+            f.write("# 其他域名（如 example.com）视为全字匹配\n")
     
     # 读取域名列表 - 先下载局域网域名，再下载中国域名
     localarea_domains = download_localarea_domains(skip_download)
@@ -194,16 +228,28 @@ def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, s
             
             # 使用去重后的域名数组替换原始域名数组
             custom_direct_domains = clean_custom_direct_domains
-            print(f"已自动移除重复域名，优化后的自定义直连域名数量: {len(custom_direct_domains)}")
+            print(f"已自动移除重复域名，优化后的自定义直连域名数量: "
+                 f"{len(custom_direct_domains['suffixes']) + len(custom_direct_domains['domains'])}")
     
-    # 合并直连域名（局域网域名优先，然后是中国域名和自定义直连域名）
-    direct_domains = localarea_domains.union(china_domains).union(custom_direct_domains)
+    # 合并直连域名
+    direct_domains = {
+        "suffixes": set().union(
+            localarea_domains.get("suffixes", set()),
+            china_domains.get("suffixes", set()),
+            custom_direct_domains.get("suffixes", set())
+        ),
+        "domains": set().union(
+            localarea_domains.get("domains", set()),
+            china_domains.get("domains", set()),
+            custom_direct_domains.get("domains", set())
+        )
+    }
     
-    print(f"局域网域名数量: {len(localarea_domains)}")
-    print(f"中国域名数量: {len(china_domains)}")
-    print(f"自定义直连域名数量: {len(custom_direct_domains)}")
-    print(f"直连域名总数: {len(direct_domains)}")
-    print(f"代理域名总数: {len(proxy_domains)}")
+    print(f"局域网域名数量: {len(localarea_domains.get('suffixes', set())) + len(localarea_domains.get('domains', set()))}")
+    print(f"中国域名数量: {len(china_domains.get('suffixes', set())) + len(china_domains.get('domains', set()))}")
+    print(f"自定义直连域名数量: {len(custom_direct_domains.get('suffixes', set())) + len(custom_direct_domains.get('domains', set()))}")
+    print(f"直连域名总数: {len(direct_domains.get('suffixes', set())) + len(direct_domains.get('domains', set()))}")
+    print(f"代理域名总数: {len(proxy_domains.get('suffixes', set())) + len(proxy_domains.get('domains', set()))}")
     
     # 读取 PAC 模板
     try:
@@ -213,13 +259,20 @@ def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, s
         print(f"读取 PAC 模板失败: {e}")
         return False
     
-    # 替换模板中的占位符
-    # 传入局域网域名列表，确保它们排在最前面
-    direct_domains_json = format_domains_for_pac(direct_domains, localarea_domains)
-    proxy_domains_json = format_domains_for_pac(proxy_domains)
+    # 使用新的格式化函数处理域名列表
+    formatted_direct_domains = format_domain_lists_for_pac(direct_domains, localarea_domains)
+    formatted_proxy_domains = format_domain_lists_for_pac(proxy_domains)
     
-    pac_content = pac_template.replace("__DIRECT_DOMAINS_PLACEHOLDER__", direct_domains_json)
-    pac_content = pac_content.replace("__PROXY_DOMAINS_PLACEHOLDER__", proxy_domains_json)
+    # 替换模板中的占位符
+    pac_content = pac_template
+    
+    # 替换新的域名列表占位符
+    pac_content = pac_content.replace("__DIRECT_DOMAIN_SUFFIXES__", formatted_direct_domains["suffixes"])
+    pac_content = pac_content.replace("__DIRECT_DOMAIN_EXACTS__", formatted_direct_domains["domains"])
+    pac_content = pac_content.replace("__PROXY_DOMAIN_SUFFIXES__", formatted_proxy_domains["suffixes"])
+    pac_content = pac_content.replace("__PROXY_DOMAIN_EXACTS__", formatted_proxy_domains["domains"])
+    
+    # 替换其他占位符
     pac_content = pac_content.replace("{proxy}", proxy)
     pac_content = pac_content.replace("{direct}", direct)
     pac_content = pac_content.replace("{default}", default)
