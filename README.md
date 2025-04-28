@@ -45,7 +45,7 @@
 脚本支持以下命令行参数，方便您根据需求自定义 PAC 文件：
 
 ```bash
-python3 generate_pac.py [--proxy PROXY] [--direct DIRECT] [--default DEFAULT] [--skip-download]
+python3 generate_pac.py [--proxy PROXY] [--direct DIRECT] [--default DEFAULT] [--skip-download] [--check-duplicates]
 ```
 
 | 参数 | 说明 | 默认值 |
@@ -54,6 +54,7 @@ python3 generate_pac.py [--proxy PROXY] [--direct DIRECT] [--default DEFAULT] [-
 | `--direct` | 设置直连规则，用于访问直连域名和内网 IP | `DIRECT` |
 | `--default` | 设置默认规则，用于不匹配任何规则的情况 | `DIRECT` |
 | `--skip-download` | 跳过下载 ACL4SSR 中国域名列表 | - |
+| `--check-duplicates` | 检查并输出 direct.txt 中与 ACL4SSR 中国域名列表重复的域名 | - |
 
 示例：
 
@@ -66,6 +67,9 @@ python3 generate_pac.py --default "PROXY 127.0.0.1:1080; DIRECT"
 
 # 组合使用多个参数
 python3 generate_pac.py --proxy "PROXY proxy.example.com:8080" --direct "DIRECT" --default "PROXY fallback.example.com:8080"
+
+# 检查重复域名
+python3 generate_pac.py --check-duplicates
 ```
 
 ### 使用预构建的 PAC 文件

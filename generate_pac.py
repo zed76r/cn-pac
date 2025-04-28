@@ -151,7 +151,7 @@ def check_duplicate_domains(china_domains, custom_domains):
     
     return duplicate_domains
 
-def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, skip_download=False, check_duplicates=True):
+def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, skip_download=False, check_duplicates=False):
     """生成 PAC 文件"""
     print("开始生成 PAC 文件...")
     
