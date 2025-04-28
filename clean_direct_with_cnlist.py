@@ -64,45 +64,66 @@ def read_direct_file():
         return [], []
 
 def check_duplicate_domains(china_domains, direct_domains):
-    """检查重复的域名"""
+    """
+    检查重复的域名，并返回重复域名信息以及清理后的域名列表
+    
+    Args:
+        china_domains: 中国域名集合
+        direct_domains: 自定义直连域名列表
+    
+    Returns:
+        duplicates: 完全匹配的重复域名列表
+        child_domains: 包含(子域名,父域名)的元组列表
+        clean_domains: 清理后的域名列表
+    """
     duplicates = []
     child_domains = []
+    clean_domains = []
     
-    # 检查完全匹配的域名
+    # 检查每个域名
     for domain in direct_domains:
         if domain in china_domains:
+            # 完全匹配的域名
             duplicates.append(domain)
         else:
             # 检查是否是中国域名的子域名
+            is_child = False
             domain_parts = domain.split('.')
             for i in range(1, len(domain_parts)):
                 parent_domain = '.'.join(domain_parts[i:])
                 if parent_domain in china_domains:
                     child_domains.append((domain, parent_domain))
+                    is_child = True
                     break
+            
+            # 如果不是子域名，保留在清理后的域名列表中
+            if not is_child:
+                clean_domains.append(domain)
     
-    return duplicates, child_domains
+    return duplicates, child_domains, clean_domains
 
-def save_clean_direct(direct_domains, comments, duplicates, child_domains):
-    """保存清理后的 direct.txt 文件，直接原地修改，不创建备份"""
-    # 创建清理后的域名列表
-    clean_domains = [d for d in direct_domains if d not in duplicates and not any(d == child[0] for child in child_domains)]
+def save_direct_file(clean_domains, comments):
+    """
+    保存域名列表到文件
     
-    # 直接保存更新后的文件
+    Args:
+        clean_domains: 清理后的域名列表
+        comments: 注释和空行列表
+    
+    Returns:
+        bool: 保存是否成功
+    """
     try:
         with open(DIRECT_TXT, 'w', encoding='utf-8') as f:
-            # 首先写入注释
+            # 写入注释
             for comment in comments:
-                if comment.strip():  # 不是空行
-                    f.write(comment)
-                else:
-                    f.write('\n')
+                f.write(comment)
             
-            # 写入保留的域名
+            # 写入域名
             for domain in clean_domains:
                 f.write(domain + '\n')
         
-        print(f"已更新 {DIRECT_TXT}")
+        print(f"已成功更新 {DIRECT_TXT}")
         return True
     except Exception as e:
         print(f"保存文件失败: {e}")
@@ -121,8 +142,8 @@ def main():
         print("无法读取 direct.txt，退出程序")
         return
     
-    # 检查重复域名
-    duplicates, child_domains = check_duplicate_domains(china_domains, direct_domains)
+    # 检查重复域名并获取清理过的域名列表
+    duplicates, child_domains, clean_domains = check_duplicate_domains(china_domains, direct_domains)
     
     # 输出统计信息
     print(f"\n发现 {len(duplicates)} 个与中国域名列表完全匹配的域名")
@@ -149,10 +170,10 @@ def main():
             return
         
         # 保存清理后的文件
-        if save_clean_direct(direct_domains, comments, duplicates, [child[0] for child in child_domains]):
+        if save_direct_file(clean_domains, comments):
             print(f"\n成功从 {DIRECT_TXT} 中删除了 {len(duplicates) + len(child_domains)} 个域名")
             print(f"原始域名数量: {len(direct_domains)}")
-            print(f"清理后域名数量: {len(direct_domains) - len(duplicates) - len(child_domains)}")
+            print(f"清理后域名数量: {len(clean_domains)}")
         else:
             print("\n清理操作失败")
     else:
