@@ -18,31 +18,32 @@ CNLIST_URL = "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/Chi
 DIRECT_TXT = "config/direct.txt"
 TIMEOUT = 30  # 设置请求超时时间（秒）
 
-def download_china_domains():
-    """从 ACL4SSR 下载中国域名列表，区分 DOMAIN-SUFFIX 和 DOMAIN 类型"""
-    print("正在下载 ACL4SSR 中国域名列表...")
-    domain_suffixes = set()  # 后缀匹配
-    domain_exacts = set()    # 全字匹配
+def download_domain_list(url, desc="域名列表"): 
+    """通用的域名列表下载和解析函数，区分 DOMAIN-SUFFIX 和 DOMAIN 类型"""
+    print(f"正在下载 {desc}...")
+    domain_suffixes = set()
+    domain_exacts = set()
     try:
-        req = urllib.request.Request(CNLIST_URL)
+        req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
             content = response.read().decode('utf-8')
             for line in content.splitlines():
-                # 提取域名规则
                 line = line.strip()
                 if line.startswith('DOMAIN-SUFFIX,'):
-                    # 提取形如 DOMAIN-SUFFIX,example.com 的域名作为后缀匹配
                     domain = line.split(',')[1].strip()
-                    domain_suffixes.add(domain)  # 直接添加域名作为后缀
+                    domain_suffixes.add(domain)
                 elif line.startswith('DOMAIN,'):
-                    # 提取形如 DOMAIN,example.com 的域名作为全字匹配
                     domain = line.split(',')[1].strip()
                     domain_exacts.add(domain)
-        print(f"成功下载中国域名: {len(domain_suffixes)} 个后缀匹配, {len(domain_exacts)} 个全字匹配")
+        print(f"成功下载{desc}: {len(domain_suffixes)} 个后缀匹配, {len(domain_exacts)} 个全字匹配")
         return {"suffixes": domain_suffixes, "domains": domain_exacts}
     except Exception as e:
-        print(f"下载中国域名列表失败: {e}")
+        print(f"下载{desc}失败: {e}")
         return {"suffixes": set(), "domains": set()}
+
+def download_china_domains():
+    """下载中国域名列表，调用通用下载函数"""
+    return download_domain_list(CNLIST_URL, "ACL4SSR 中国域名列表")
 
 def read_direct_file():
     """读取本地 direct.txt 文件，区分后缀匹配和全字匹配域名"""
@@ -75,76 +76,56 @@ def read_direct_file():
 def check_duplicate_domains(china_domains, direct_domains, original_domains):
     """
     检查重复的域名，并返回重复域名信息以及清理后的域名列表
-    
-    Args:
-        china_domains: 中国域名字典，包含 "suffixes" 和 "domains" 键
-        direct_domains: 自定义直连域名字典，包含 "suffixes" 和 "domains" 键
-        original_domains: 原始域名列表（保留格式）
-    
-    Returns:
-        duplicates: 完全匹配的重复域名列表
-        child_domains: 包含(子域名,父域名)的元组列表
-        clean_domains: 清理后的原始格式域名列表
     """
-    duplicates = []
-    child_domains = []
-    
+    def check_duplicates_and_subdomains(custom_list, base_set, domain_map):
+        duplicates = []
+        child_domains = []
+        to_remove = set()
+        for custom in custom_list:
+            if custom in base_set:
+                duplicates.append(domain_map[custom])
+                to_remove.add(custom)
+                continue
+            parts = custom.split('.')
+            for i in range(1, len(parts)):
+                parent = '.'.join(parts[i:])
+                if parent in base_set:
+                    child_domains.append((domain_map[custom], parent))
+                    to_remove.add(custom)
+                    break
+        return duplicates, child_domains, to_remove
+
     # 创建原始域名到处理后域名的映射
     domain_map = {}
     for domain in original_domains:
         if domain.startswith('.'):
-            domain_map[domain[1:]] = domain  # .example.com -> example.com
+            domain_map[domain[1:]] = domain
         else:
-            domain_map[domain] = domain      # example.com -> example.com
-    
-    # 标记需要删除的域名
-    domains_to_remove = set()
-    
-    # 1. 检查完全匹配的后缀
+            domain_map[domain] = domain
+
     cn_suffixes = china_domains.get("suffixes", set())
-    direct_suffixes = direct_domains.get("suffixes", [])
-    
-    for custom_suffix in direct_suffixes:
-        # 检查是否在中国域名后缀列表中
-        if custom_suffix in cn_suffixes:
-            duplicates.append(domain_map[custom_suffix])  # 用原始格式
-            domains_to_remove.add(custom_suffix)
-            continue
-            
-        # 检查是否是中国域名后缀的子域名
-        domain_parts = custom_suffix.split('.')
-        for i in range(1, len(domain_parts)):
-            parent_domain = '.'.join(domain_parts[i:])
-            if parent_domain in cn_suffixes:
-                child_domains.append((domain_map[custom_suffix], parent_domain))  # 用原始格式
-                domains_to_remove.add(custom_suffix)
-                break
-    
-    # 2. 检查完全匹配的域名
     cn_exact_domains = china_domains.get("domains", set())
+    direct_suffixes = direct_domains.get("suffixes", [])
     direct_exact_domains = direct_domains.get("domains", [])
-    
-    for custom_domain in direct_exact_domains:
-        # 检查是否在中国域名完全匹配列表中
-        if custom_domain in cn_exact_domains:
-            duplicates.append(domain_map[custom_domain])  # 用原始格式
-            domains_to_remove.add(custom_domain)
-            continue
-            
-        # 检查是否是中国域名后缀的子域名
-        domain_parts = custom_domain.split('.')
-        for i in range(1, len(domain_parts)):
-            parent_domain = '.'.join(domain_parts[i:])
-            if parent_domain in cn_suffixes:
-                child_domains.append((domain_map[custom_domain], parent_domain))  # 用原始格式
-                domains_to_remove.add(custom_domain)
+
+    dups1, childs1, remove1 = check_duplicates_and_subdomains(direct_suffixes, cn_suffixes, domain_map)
+    dups2, childs2, remove2 = check_duplicates_and_subdomains(direct_exact_domains, cn_exact_domains, domain_map)
+
+    # 检查自定义全字匹配是否是中国域名后缀的子域名
+    childs3 = []
+    remove3 = set()
+    for custom in direct_exact_domains:
+        parts = custom.split('.')
+        for i in range(1, len(parts)):
+            parent = '.'.join(parts[i:])
+            if parent in cn_suffixes:
+                childs3.append((domain_map[custom], parent))
+                remove3.add(custom)
                 break
-    
-    # 构建清理后的原始格式域名列表
-    clean_domains = [domain for domain in original_domains if domain_map.get(domain, domain) not in domains_to_remove and 
-                    (domain.startswith('.') and domain[1:] not in domains_to_remove or not domain.startswith('.') and domain not in domains_to_remove)]
-    
-    return duplicates, child_domains, clean_domains
+
+    all_to_remove = remove1 | remove2 | remove3
+    clean_domains = [domain for domain in original_domains if (domain.startswith('.') and domain[1:] not in all_to_remove) or (not domain.startswith('.') and domain not in all_to_remove)]
+    return dups1 + dups2, childs1 + childs2 + childs3, clean_domains
 
 def save_direct_file(clean_domains, comments):
     """

@@ -24,67 +24,39 @@ def ensure_dir(directory):
     if not os.path.exists(directory):
         os.makedirs(directory)
 
-def download_china_domains(skip_download=False):
-    """从 ACL4SSR 下载中国域名列表，区分 DOMAIN-SUFFIX 和 DOMAIN 类型"""
+def download_domain_list(url, skip_download=False, desc="域名列表"):
+    """通用的域名列表下载和解析函数，区分 DOMAIN-SUFFIX 和 DOMAIN 类型"""
     if skip_download:
-        print("跳过下载中国域名列表...")
+        print(f"跳过下载{desc}...")
         return {"suffixes": set(), "domains": set()}
-        
-    print("正在下载 ACL4SSR 中国域名列表...")
-    domain_suffixes = set()  # 后缀匹配
-    domain_exacts = set()    # 全字匹配
+    print(f"正在下载 {desc}...")
+    domain_suffixes = set()
+    domain_exacts = set()
     try:
-        req = urllib.request.Request(CNLIST_URL)
+        req = urllib.request.Request(url)
         with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
             content = response.read().decode('utf-8')
             for line in content.splitlines():
-                # 提取域名规则
                 line = line.strip()
                 if line.startswith('DOMAIN-SUFFIX,'):
-                    # 提取形如 DOMAIN-SUFFIX,example.com 的域名作为后缀匹配
                     domain = line.split(',')[1].strip()
-                    domain_suffixes.add(domain)  # 直接添加域名作为后缀
+                    domain_suffixes.add(domain)
                 elif line.startswith('DOMAIN,'):
-                    # 提取形如 DOMAIN,example.com 的域名作为全字匹配
                     domain = line.split(',')[1].strip()
                     domain_exacts.add(domain)
-                # 直连关键词我们直接忽略，因为 PAC 不支持关键词匹配
-        print(f"成功下载中国域名: {len(domain_suffixes)} 个后缀匹配, {len(domain_exacts)} 个全字匹配")
+        print(f"成功下载{desc}: {len(domain_suffixes)} 个后缀匹配, {len(domain_exacts)} 个全字匹配")
         return {"suffixes": domain_suffixes, "domains": domain_exacts}
     except Exception as e:
-        print(f"下载中国域名列表失败: {e}")
+        print(f"下载{desc}失败: {e}")
         return {"suffixes": set(), "domains": set()}
 
+def download_china_domains(skip_download=False):
+    """下载中国域名列表，调用通用下载函数"""
+    return download_domain_list(CNLIST_URL, skip_download, "ACL4SSR 中国域名列表")
+
 def download_localarea_domains(skip_download=False):
-    """从 ACL4SSR 下载局域网域名列表，区分 DOMAIN-SUFFIX 和 DOMAIN 类型"""
-    if skip_download:
-        print("跳过下载局域网域名列表...")
-        return {"suffixes": set(), "domains": set()}
-        
-    print("正在下载 ACL4SSR 局域网域名列表...")
-    domain_suffixes = set()  # 后缀匹配
-    domain_exacts = set()    # 全字匹配
-    try:
-        req = urllib.request.Request(LOCALAREA_URL)
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
-            content = response.read().decode('utf-8')
-            for line in content.splitlines():
-                # 提取域名规则
-                line = line.strip()
-                if line.startswith('DOMAIN-SUFFIX,'):
-                    # 提取形如 DOMAIN-SUFFIX,example.com 的域名作为后缀匹配
-                    domain = line.split(',')[1].strip()
-                    domain_suffixes.add(domain)  # 直接添加域名作为后缀
-                elif line.startswith('DOMAIN,'):
-                    # 提取形如 DOMAIN,example.com 的域名作为全字匹配
-                    domain = line.split(',')[1].strip()
-                    domain_exacts.add(domain)
-                # 其他规则类型（如 IP-CIDR）在 PAC 中不直接支持，已通过模板中的 isPrivateIP 函数处理
-        print(f"成功下载局域网域名: {len(domain_suffixes)} 个后缀匹配, {len(domain_exacts)} 个全字匹配")
-        return {"suffixes": domain_suffixes, "domains": domain_exacts}
-    except Exception as e:
-        print(f"下载局域网域名列表失败: {e}")
-        return {"suffixes": set(), "domains": set()}
+    """下载局域网域名列表，调用通用下载函数"""
+    return download_domain_list(LOCALAREA_URL, skip_download, "ACL4SSR 局域网域名列表")
 
 def read_domain_file(filename):
     """读取域名文件，根据是否以.开头来区分后缀匹配和全字匹配"""
@@ -128,63 +100,47 @@ def format_domain_lists_for_pac(domain_dict, local_domains=None):
     return result
 
 def check_duplicate_domains(china_domains, custom_domains):
-    """检查自定义直连域名中哪些已经存在于中国域名列表中，并返回清理后的域名列表
-    
-    Args:
-        china_domains: 中国域名字典，包含 "suffixes" 和 "domains" 键
-        custom_domains: 自定义直连域名字典，包含 "suffixes" 和 "domains" 键
-    
-    Returns:
-        tuple: (重复的域名列表, 清理后的域名字典)
-    """
+    """检查自定义直连域名中哪些已经存在于中国域名列表中，并返回清理后的域名列表"""
+    def check_duplicates_and_subdomains(custom_set, base_set, label):
+        duplicates = []
+        clean_set = set(custom_set)
+        # 完全匹配
+        matched = custom_set & base_set
+        if matched:
+            duplicates.extend(list(matched))
+            clean_set -= matched
+        # 子域名匹配
+        for item in list(clean_set):
+            parts = item.split('.')
+            for i in range(1, len(parts)):
+                parent = '.'.join(parts[i:])
+                if parent in base_set:
+                    duplicates.append(f"{item} (子域名匹配: {parent})")
+                    clean_set.remove(item)
+                    break
+        return duplicates, clean_set
+
     duplicate_domains = []
-    
-    # 初始化清理后的域名集合
-    clean_domains = {
-        "suffixes": set(custom_domains.get("suffixes", set())),
-        "domains": set(custom_domains.get("domains", set()))
-    }
-    
-    # 对后缀匹配域名进行检查
-    cn_suffixes = china_domains.get("suffixes", set())
-    custom_suffixes = custom_domains.get("suffixes", set())
-    
-    # 1. 检查完全匹配的后缀
-    suffix_duplicates = custom_suffixes.intersection(cn_suffixes)
-    if suffix_duplicates:
-        duplicate_domains.extend(list(suffix_duplicates))
-        clean_domains["suffixes"] -= suffix_duplicates
-    
-    # 2. 检查自定义后缀域名是否是中国域名后缀的子域名
-    for custom_suffix in list(clean_domains["suffixes"]):
-        domain_parts = custom_suffix.split('.')
-        for i in range(1, len(domain_parts)):
-            parent_domain = '.'.join(domain_parts[i:])
-            if parent_domain in cn_suffixes:
-                duplicate_domains.append(f"{custom_suffix} (子域名匹配: {parent_domain})")
-                clean_domains["suffixes"].remove(custom_suffix)
-                break
-    
-    # 对全字匹配域名进行检查
-    cn_exact_domains = china_domains.get("domains", set())
-    custom_exact_domains = custom_domains.get("domains", set())
-    
-    # 3. 检查完全匹配的域名
-    domain_duplicates = custom_exact_domains.intersection(cn_exact_domains)
-    if domain_duplicates:
-        duplicate_domains.extend(list(domain_duplicates))
-        clean_domains["domains"] -= domain_duplicates
-    
-    # 4. 检查自定义全字匹配域名是否是中国域名后缀的子域名
-    for custom_domain in list(clean_domains["domains"]):
-        domain_parts = custom_domain.split('.')
-        for i in range(1, len(domain_parts)):
-            parent_domain = '.'.join(domain_parts[i:])
-            if parent_domain in cn_suffixes:
-                duplicate_domains.append(f"{custom_domain} (子域名匹配: {parent_domain})")
-                clean_domains["domains"].remove(custom_domain)
-                break
-    
+    clean_domains = {"suffixes": set(), "domains": set()}
+
+    # 后缀匹配
+    dups, clean = check_duplicates_and_subdomains(
+        custom_domains.get("suffixes", set()),
+        china_domains.get("suffixes", set()),
+        "后缀"
+    )
+    duplicate_domains.extend(dups)
+    clean_domains["suffixes"] = clean
+
+    # 全字匹配
+    dups, clean = check_duplicates_and_subdomains(
+        custom_domains.get("domains", set()),
+        china_domains.get("domains", set()),
+        "全字"
+    )
+    duplicate_domains.extend(dups)
+    clean_domains["domains"] = clean
+
     return duplicate_domains, clean_domains
 
 def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, skip_download=False, check_duplicates=False):
