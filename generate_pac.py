@@ -9,7 +9,7 @@ import re
 from datetime import datetime
 
 # 配置参数
-CNLIST_URL = "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaDomain.list"
+CNLIST_URL = "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-cn.list"
 LOCALAREA_URL = "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/LocalAreaNetwork.list"
 CONFIG_DIR = "config"
 OUTPUT_DIR = "output"
@@ -33,17 +33,26 @@ def download_domain_list(url, skip_download=False, desc="域名列表"):
     domain_suffixes = set()
     domain_exacts = set()
     try:
-        req = urllib.request.Request(url)
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
             content = response.read().decode('utf-8')
             for line in content.splitlines():
                 line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
                 if line.startswith('DOMAIN-SUFFIX,'):
                     domain = line.split(',')[1].strip()
                     domain_suffixes.add(domain)
                 elif line.startswith('DOMAIN,'):
                     domain = line.split(',')[1].strip()
                     domain_exacts.add(domain)
+                elif line.startswith('+.'):
+                    # MetaCubeX format: +.example.com means suffix match
+                    domain = line[2:].strip()
+                    domain_suffixes.add(domain)
+                elif ',' not in line and '/' not in line:
+                    # Plain domain (no Clash rule prefix, not a URL path)
+                    domain_exacts.add(line)
         print(f"成功下载{desc}: {len(domain_suffixes)} 个后缀匹配, {len(domain_exacts)} 个全字匹配")
         return {"suffixes": domain_suffixes, "domains": domain_exacts}
     except Exception as e:
@@ -52,7 +61,7 @@ def download_domain_list(url, skip_download=False, desc="域名列表"):
 
 def download_china_domains(skip_download=False):
     """下载中国域名列表，调用通用下载函数"""
-    return download_domain_list(CNLIST_URL, skip_download, "ACL4SSR 中国域名列表")
+    return download_domain_list(CNLIST_URL, skip_download, "MetaCubeX 中国域名列表")
 
 def download_localarea_domains(skip_download=False):
     """下载局域网域名列表，调用通用下载函数"""
