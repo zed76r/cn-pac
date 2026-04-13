@@ -9,7 +9,8 @@ import re
 from datetime import datetime
 
 # 配置参数
-CNLIST_URL = "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-cn.list"
+CNLIST_METACUBEX_URL = "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-cn.list"
+CNLIST_ACL4SSR_URL = "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/ChinaDomain.list"
 LOCALAREA_URL = "https://raw.githubusercontent.com/ACL4SSR/ACL4SSR/master/Clash/LocalAreaNetwork.list"
 CONFIG_DIR = "config"
 OUTPUT_DIR = "output"
@@ -59,9 +60,12 @@ def download_domain_list(url, skip_download=False, desc="域名列表"):
         print(f"下载{desc}失败: {e}")
         return {"suffixes": set(), "domains": set()}
 
-def download_china_domains(skip_download=False):
-    """下载中国域名列表，调用通用下载函数"""
-    return download_domain_list(CNLIST_URL, skip_download, "MetaCubeX 中国域名列表")
+def download_china_domains(skip_download=False, source="metacubex"):
+    """下载中国域名列表，支持 acl4ssr / metacubex 两种来源"""
+    if source == "acl4ssr":
+        return download_domain_list(CNLIST_ACL4SSR_URL, skip_download, "ACL4SSR 中国域名列表")
+    else:  # metacubex (default)
+        return download_domain_list(CNLIST_METACUBEX_URL, skip_download, "MetaCubeX 中国域名列表")
 
 def download_localarea_domains(skip_download=False):
     """下载局域网域名列表，调用通用下载函数"""
@@ -152,7 +156,7 @@ def check_duplicate_domains(china_domains, custom_domains):
 
     return duplicate_domains, clean_domains
 
-def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, skip_download=False, check_duplicates=False):
+def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, skip_download=False, check_duplicates=False, source="metacubex", output_name="proxy.pac"):
     """生成 PAC 文件，区分后缀匹配和全字匹配域名"""
     print("开始生成 PAC 文件...")
     
@@ -178,7 +182,7 @@ def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, s
     
     # 读取域名列表 - 先下载局域网域名，再下载中国域名
     localarea_domains = download_localarea_domains(skip_download)
-    china_domains = download_china_domains(skip_download)
+    china_domains = download_china_domains(skip_download, source)
     custom_direct_domains = read_domain_file(direct_config)
     proxy_domains = read_domain_file(proxy_config)
     
@@ -242,7 +246,7 @@ def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, s
     pac_content = pac_content.replace("{default}", default)
     
     # 写入 PAC 文件
-    output_file = os.path.join(OUTPUT_DIR, "proxy.pac")
+    output_file = os.path.join(OUTPUT_DIR, output_name)
     try:
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(pac_content)
@@ -278,7 +282,9 @@ if __name__ == "__main__":
     default = DEFAULT_RULE
     skip_download = False
     check_duplicates = False
-    
+    source = "metacubex"
+    output_name = "proxy.pac"
+
     # 解析命令行参数
     i = 1
     while i < len(sys.argv):
@@ -297,22 +303,32 @@ if __name__ == "__main__":
         elif sys.argv[i] == "--check-duplicates":
             check_duplicates = True
             i += 1
+        elif sys.argv[i] == "--source" and i+1 < len(sys.argv):
+            source = sys.argv[i+1]
+            if source not in ("acl4ssr", "metacubex"):
+                print(f"错误: --source 必须为 acl4ssr 或 metacubex")
+                sys.exit(1)
+            i += 2
+        elif sys.argv[i] == "--output" and i+1 < len(sys.argv):
+            output_name = sys.argv[i+1]
+            i += 2
         elif sys.argv[i] == "--help":
             show_help()
             sys.exit(0)
         else:
             i += 1
-    
+
     print(f"使用代理服务器: {proxy}")
     print(f"使用直连规则: {direct}")
     print(f"使用默认规则: {default}")
+    print(f"域名列表来源: {source}")
     if skip_download:
         print("跳过下载中国域名列表")
     if check_duplicates:
         print("将检查直连域名列表中的重复项")
-    
+
     # 生成 PAC 文件
-    if generate_pac(proxy, direct, default, skip_download, check_duplicates):
+    if generate_pac(proxy, direct, default, skip_download, check_duplicates, source, output_name):
         print("PAC 文件生成成功！")
     else:
         print("PAC 文件生成失败！")

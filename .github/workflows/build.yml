@@ -32,24 +32,31 @@ jobs:
       - name: 运行 PAC 生成脚本并捕获统计数据
         id: generate_pac
         run: |
-          # 使用 tee 命令同时输出到控制台和文件
-          python3 generate_pac.py --check-duplicates | tee pac_output.log
-          
-          # 从输出日志中提取统计数据
-          LOCALAREA_COUNT=$(grep -o "局域网域名数量: [0-9]*" pac_output.log | awk '{print $2}')
-          CHINA_COUNT=$(grep -o "中国域名数量: [0-9]*" pac_output.log | awk '{print $2}')
-          DIRECT_COUNT=$(grep -o "自定义直连域名数量: [0-9]*" pac_output.log | awk '{print $2}')
-          TOTAL_DIRECT=$(grep -o "直连域名总数: [0-9]*" pac_output.log | awk '{print $2}')
-          PROXY_COUNT=$(grep -o "代理域名总数: [0-9]*" pac_output.log | awk '{print $2}')
-          
-          # 检查是否有移除的重复域名
-          REMOVED_COUNT=$(grep -o "已自动移除重复域名数量: [0-9]*" pac_output.log | awk '{print $2}')
-          
+          # MetaCubeX 列表
+          python3 generate_pac.py --check-duplicates --source metacubex --output proxy-metacubex.pac | tee pac_metacubex.log
+
+          # ACL4SSR 列表
+          python3 generate_pac.py --check-duplicates --source acl4ssr --output proxy-acl4ssr.pac | tee pac_acl4ssr.log
+
+          # 从 MetaCubeX 日志提取统计数据
+          LOCALAREA_COUNT=$(grep -o "局域网域名数量: [0-9]*" pac_metacubex.log | awk '{print $2}')
+          METACUBEX_COUNT=$(grep -o "中国域名数量: [0-9]*" pac_metacubex.log | awk '{print $2}')
+          DIRECT_COUNT=$(grep -o "^自定义直连域名数量: [0-9]*" pac_metacubex.log | awk '{print $2}')
+          TOTAL_DIRECT_METACUBEX=$(grep -o "直连域名总数: [0-9]*" pac_metacubex.log | awk '{print $2}')
+          PROXY_COUNT=$(grep -o "代理域名总数: [0-9]*" pac_metacubex.log | awk '{print $2}')
+          REMOVED_COUNT=$(grep -o "已自动移除重复域名数量: [0-9]*" pac_metacubex.log | awk '{print $2}')
+
+          # 从 ACL4SSR 日志提取中国域名数量
+          ACL4SSR_COUNT=$(grep -o "中国域名数量: [0-9]*" pac_acl4ssr.log | awk '{print $2}')
+          TOTAL_DIRECT_ACL4SSR=$(grep -o "直连域名总数: [0-9]*" pac_acl4ssr.log | awk '{print $2}')
+
           # 输出到环境变量
           echo "LOCALAREA_COUNT=${LOCALAREA_COUNT:-0}" >> $GITHUB_OUTPUT
-          echo "CHINA_COUNT=${CHINA_COUNT:-0}" >> $GITHUB_OUTPUT
+          echo "METACUBEX_COUNT=${METACUBEX_COUNT:-0}" >> $GITHUB_OUTPUT
+          echo "ACL4SSR_COUNT=${ACL4SSR_COUNT:-0}" >> $GITHUB_OUTPUT
           echo "DIRECT_COUNT=${DIRECT_COUNT:-0}" >> $GITHUB_OUTPUT
-          echo "TOTAL_DIRECT=${TOTAL_DIRECT:-0}" >> $GITHUB_OUTPUT
+          echo "TOTAL_DIRECT_METACUBEX=${TOTAL_DIRECT_METACUBEX:-0}" >> $GITHUB_OUTPUT
+          echo "TOTAL_DIRECT_ACL4SSR=${TOTAL_DIRECT_ACL4SSR:-0}" >> $GITHUB_OUTPUT
           echo "PROXY_COUNT=${PROXY_COUNT:-0}" >> $GITHUB_OUTPUT
           echo "REMOVED_COUNT=${REMOVED_COUNT:-0}" >> $GITHUB_OUTPUT
         
@@ -117,18 +124,21 @@ jobs:
           name: ${{ steps.check_releases.outputs.RELEASE_NAME }}
           body: |
             PAC 文件自动更新 - ${{ steps.check_releases.outputs.TAG }}
-            
+
+            ## 文件说明
+            - `proxy-metacubex.pac` — 基于 MetaCubeX geolocation-cn 列表（较大）
+            - `proxy-acl4ssr.pac` — 基于 ACL4SSR ChinaDomain 列表（较小）
+
             ## 更新统计
             - 局域网域名数量: ${{ steps.generate_pac.outputs.LOCALAREA_COUNT }}
-            - 中国域名数量: ${{ steps.generate_pac.outputs.CHINA_COUNT }}
+            - MetaCubeX 中国域名数量: ${{ steps.generate_pac.outputs.METACUBEX_COUNT }}（直连总计 ${{ steps.generate_pac.outputs.TOTAL_DIRECT_METACUBEX }}）
+            - ACL4SSR 中国域名数量: ${{ steps.generate_pac.outputs.ACL4SSR_COUNT }}（直连总计 ${{ steps.generate_pac.outputs.TOTAL_DIRECT_ACL4SSR }}）
             - 自定义直连域名数量: ${{ steps.generate_pac.outputs.DIRECT_COUNT }}
-            - 直连域名总数: ${{ steps.generate_pac.outputs.TOTAL_DIRECT }}
             - 代理域名总数: ${{ steps.generate_pac.outputs.PROXY_COUNT }}
             ${{ steps.generate_pac.outputs.REMOVED_COUNT != '0' && format('- 已移除重复域名: {0}', steps.generate_pac.outputs.REMOVED_COUNT) || '' }}
-            
-            本次更新基于最新的 MetaCubeX 中国域名列表生成。
           files: |
-            output/proxy.pac
+            output/proxy-metacubex.pac
+            output/proxy-acl4ssr.pac
           draft: false
           prerelease: false
         env:
