@@ -43,7 +43,7 @@ jobs:
           PROXY_COUNT=$(grep -o "代理域名总数: [0-9]*" pac_output.log | awk '{print $2}')
           
           # 检查是否有移除的重复域名
-          REMOVED_COUNT=$(grep -o "已自动移除重复域名.*: [0-9]*" pac_output.log | awk '{print $NF}')
+          REMOVED_COUNT=$(grep -o "已自动移除重复域名数量: [0-9]*" pac_output.log | awk '{print $2}')
           
           # 输出到环境变量
           echo "LOCALAREA_COUNT=${LOCALAREA_COUNT:-0}" >> $GITHUB_OUTPUT

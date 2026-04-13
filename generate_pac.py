@@ -193,8 +193,7 @@ def generate_pac(proxy=PROXY_SERVER, direct=DIRECT_RULE, default=DEFAULT_RULE, s
             
             # 使用去重后的域名数组替换原始域名数组
             custom_direct_domains = clean_custom_direct_domains
-            print(f"已自动移除重复域名，优化后的自定义直连域名数量: "
-                 f"{len(custom_direct_domains['suffixes']) + len(custom_direct_domains['domains'])}")
+            print(f"已自动移除重复域名数量: {len(duplicate_domains)}")
     
     # 合并直连域名
     direct_domains = {
