@@ -126,7 +126,7 @@ jobs:
             - 代理域名总数: ${{ steps.generate_pac.outputs.PROXY_COUNT }}
             ${{ steps.generate_pac.outputs.REMOVED_COUNT != '0' && format('- 已移除重复域名: {0}', steps.generate_pac.outputs.REMOVED_COUNT) || '' }}
             
-            本次更新基于最新的 ACL4SSR 中国域名列表生成。
+            本次更新基于最新的 MetaCubeX 中国域名列表生成。
           files: |
             output/proxy.pac
           draft: false
